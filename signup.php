@@ -1,6 +1,8 @@
 <?php
 require 'db.php';
-if (session_status() === PHP_SESSION_NONE) session_start();
+
+use App\Models\User;
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -17,12 +19,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             $hash = password_hash($password, PASSWORD_DEFAULT);
-
-            $stmt = getDB()->prepare(
-                'INSERT INTO users (username, password_hash, name) VALUES (?, ?, ?)'
-            );
-            $stmt->bind_param('sss', $username, $hash, $name);
-            $stmt->execute();
+            User::create($username, $hash, $name);
 
             header('Location: login.php');
             exit;
@@ -47,7 +44,7 @@ require 'header.php';
             <div class="mb-3">
                 <label class="form-label">아이디</label>
                 <input type="text" name="username" class="form-control"
-                       value="<?= htmlspecialchars($username ?? '') ?>">
+                    value="<?= htmlspecialchars($username ?? '') ?>">
                 <div class="form-text">영문/숫자 4~20자</div>
             </div>
             <div class="mb-3">
@@ -58,7 +55,7 @@ require 'header.php';
             <div class="mb-3">
                 <label class="form-label">이름</label>
                 <input type="text" name="name" class="form-control"
-                       value="<?= htmlspecialchars($name ?? '') ?>">
+                    value="<?= htmlspecialchars($name ?? '') ?>">
             </div>
             <button type="submit" class="btn btn-primary w-100">가입하기</button>
         </form>

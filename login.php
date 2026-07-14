@@ -1,6 +1,8 @@
 <?php
-require_once __DIR__ . '/db.php';
-session_start();
+require 'db.php';
+
+use App\Models\User;
+
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -11,22 +13,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = '아이디와 비밀번호를 입력하세요.';
     } else {
         try {
-            $stmt = getDB()->prepare(
-                'SELECT id, username, password_hash, name, role, status FROM users WHERE username = ?'
-            );
-            $stmt->bind_param('s', $username);
-            $stmt->execute();
-            $user = $stmt->get_result()->fetch_assoc();
+            $user = User::findByUsername($username);
 
-            if (!$user || !password_verify($password, $user['password_hash'])) {
+            if (!$user) {
                 $error = '아이디 또는 비밀번호가 올바르지 않습니다.';
             } elseif ($user['status'] !== 'active') {
                 $error = '비활성화된 계정입니다.';
+            } elseif ($user['locked_until'] !== null && strtotime($user['locked_until']) > time()) {
+                // 아직 잠금 시간이 안 지남 -> 비밀번호 확인도 하지 않고 바로 거부
+                $remainSec = strtotime($user['locked_until']) - time();
+                $remainMin = ceil($remainSec / 60);
+                $error = "로그인 5회 실패로 계정이 잠겼습니다. {$remainMin}분 후 다시 시도하세요.";
+            } elseif (!password_verify($password, $user['password_hash'])) {
+                User::incrementFailCount($user['id']);
+                $newCount = $user['fail_count'] + 1;
+
+                if ($newCount >= 5) {
+                    User::lockAccount($user['id']);
+                    $error = '로그인 5회 실패로 계정이 5분간 잠겼습니다.';
+                } else {
+                    $left = 5 - $newCount;
+                    $error = "아이디 또는 비밀번호가 올바르지 않습니다. (남은 시도 {$left}회)";
+                }
             } else {
-                $upd = getDB()->prepare('UPDATE users SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?');
-                $ip = $_SERVER['REMOTE_ADDR'];
-                $upd->bind_param('si', $ip, $user['id']);
-                $upd->execute();
+                // 로그인 성공
+                User::resetFailCount($user['id']);
+                User::updateLastLogin($user['id'], $_SERVER['REMOTE_ADDR']);
 
                 session_regenerate_id(true);
                 $_SESSION['user_id'] = $user['id'];

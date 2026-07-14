@@ -1,8 +1,11 @@
 <?php
-require_once '../auth_check.php';
-require_once '../db.php';
-require_once '../admin_check.php';
-require_once '../csrf.php';
+require_once __DIR__ . '/../auth_check.php';
+require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../admin_check.php';
+require_once __DIR__ . '/../csrf.php';
+
+use App\Models\User;
+use App\Models\AdminLog;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST' || !csrf_verify()) {
     header('Location: users.php');
@@ -20,63 +23,41 @@ if (!$targetId || !in_array($action, $allowedActions, true)) {
     exit;
 }
 
-// 자기 자신 대상 액션 금지
 if ($targetId === $adminId) {
     header('Location: users.php?error=self');
     exit;
 }
 
 try {
-    $db = getDB();
-
     switch ($action) {
         case 'deactivate':
-            $stmt = $db->prepare("UPDATE users SET status = 'inactive' WHERE id = ?");
-            $stmt->bind_param('i', $targetId);
-            $stmt->execute();
+            User::updateStatus($targetId, 'inactive');
             break;
 
         case 'activate':
-            $stmt = $db->prepare("UPDATE users SET status = 'active' WHERE id = ?");
-            $stmt->bind_param('i', $targetId);
-            $stmt->execute();
+            User::updateStatus($targetId, 'active');
             break;
 
         case 'withdraw':
-            $stmt = $db->prepare("UPDATE users SET status = 'deleted' WHERE id = ?");
-            $stmt->bind_param('i', $targetId);
-            $stmt->execute();
+            User::updateStatus($targetId, 'deleted');
             break;
 
         case 'reset_password':
-            $tempPassword = bin2hex(random_bytes(4)); // 8자리 임시 비밀번호
-            $hash = password_hash($tempPassword, PASSWORD_DEFAULT);
-            $stmt = $db->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
-            $stmt->bind_param('si', $hash, $targetId);
-            $stmt->execute();
+            $tempPassword = User::resetPassword($targetId);
             $_SESSION['temp_password_notice'] = $tempPassword;
             break;
 
         case 'grant_edit':
         case 'revoke_edit':
-            // 최고관리자만 권한 위임 가능 (서버 단 재검증)
             if ($_SESSION['role'] !== 'super_admin') {
                 header('Location: users.php?error=forbidden');
                 exit;
             }
-            $value = ($action === 'grant_edit') ? 1 : 0;
-            $stmt = $db->prepare(
-                "UPDATE users SET can_edit_users = ? WHERE id = ? AND role = 'sub_admin'"
-            );
-            $stmt->bind_param('ii', $value, $targetId);
-            $stmt->execute();
+            User::setEditPermission($targetId, $action === 'grant_edit');
             break;
     }
 
-    // 감사 로그 기록
-    $log = $db->prepare('INSERT INTO admin_logs (admin_id, target_user_id, action) VALUES (?, ?, ?)');
-    $log->bind_param('iis', $adminId, $targetId, $action);
-    $log->execute();
+    AdminLog::record($adminId, $targetId, $action);
 } catch (mysqli_sql_exception $e) {
     header('Location: users.php?error=db');
     exit;

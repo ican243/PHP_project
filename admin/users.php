@@ -4,48 +4,17 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../admin_check.php';
 require_once __DIR__ . '/../csrf.php';
 
-// 페이지네이션 설정
+use App\Models\User;
+
 $perPage = 10;
 $page = filter_input(INPUT_GET, 'page', FILTER_VALIDATE_INT) ?: 1;
 if ($page < 1) $page = 1;
 $offset = ($page - 1) * $perPage;
-
-// 검색어
 $keyword = trim($_GET['keyword'] ?? '');
 
 try {
-    $db = getDB();
-
-    if ($keyword !== '') {
-        $like = '%' . $keyword . '%';
-
-        // 전체 개수 (검색 조건 적용)
-        $countStmt = $db->prepare(
-            "SELECT COUNT(*) AS cnt FROM users WHERE username LIKE ? OR name LIKE ?"
-        );
-        $countStmt->bind_param('ss', $like, $like);
-        $countStmt->execute();
-        $total = $countStmt->get_result()->fetch_assoc()['cnt'];
-
-        // 목록
-        $stmt = $db->prepare(
-            "SELECT id, username, name, role, status, can_edit_users, created_at
-             FROM users WHERE username LIKE ? OR name LIKE ?
-             ORDER BY id DESC LIMIT ? OFFSET ?"
-        );
-        $stmt->bind_param('ssii', $like, $like, $perPage, $offset);
-    } else {
-        $total = $db->query("SELECT COUNT(*) AS cnt FROM users")->fetch_assoc()['cnt'];
-
-        $stmt = $db->prepare(
-            "SELECT id, username, name, role, status, can_edit_users, created_at
-             FROM users ORDER BY id DESC LIMIT ? OFFSET ?"
-        );
-        $stmt->bind_param('ii', $perPage, $offset);
-    }
-
-    $stmt->execute();
-    $users = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $total = User::countForAdmin($keyword);
+    $users = User::listForAdmin($keyword, $perPage, $offset);
     $totalPages = max(1, ceil($total / $perPage));
 } catch (mysqli_sql_exception $e) {
     exit('유저 목록을 불러오는 중 오류가 발생했습니다.');

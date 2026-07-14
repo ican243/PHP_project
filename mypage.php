@@ -1,15 +1,11 @@
 <?php
-require_once __DIR__ . '/auth_check.php';
-require_once __DIR__ . '/db.php';
+require 'auth_check.php';
+require 'db.php';
+
+use App\Models\User;
 
 try {
-    $stmt = getDB()->prepare(
-        'SELECT username, name, bio, role, last_login_at, last_login_ip, created_at
-         FROM users WHERE id = ?'
-    );
-    $stmt->bind_param('i', $_SESSION['user_id']);
-    $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
+    $user = User::findById($_SESSION['user_id']);
 } catch (mysqli_sql_exception $e) {
     exit('정보를 불러오는 중 오류가 발생했습니다.');
 }

@@ -19,6 +19,7 @@ class Database
             );
 
             mysqli_set_charset(self::$conn, 'utf8mb4');
+            self::$conn->query("SET time_zone = '+09:00'");
         }
 
         return self::$conn;

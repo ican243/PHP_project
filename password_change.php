@@ -1,7 +1,9 @@
 <?php
-require_once __DIR__ . '/auth_check.php';
-require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/csrf.php';
+require 'auth_check.php';
+require 'db.php';
+require 'csrf.php';
+
+use App\Models\User;
 
 $error = '';
 $success = '';
@@ -22,18 +24,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = '새 비밀번호는 8자 이상.';
         } else {
             try {
-                $stmt = getDB()->prepare('SELECT password_hash FROM users WHERE id = ?');
-                $stmt->bind_param('i', $_SESSION['user_id']);
-                $stmt->execute();
-                $row = $stmt->get_result()->fetch_assoc();
+                $currentHash = User::getPasswordHash($_SESSION['user_id']);
 
-                if (!password_verify($current, $row['password_hash'])) {
+                if (!password_verify($current, $currentHash)) {
                     $error = '현재 비밀번호가 올바르지 않습니다.';
                 } else {
-                    $hash = password_hash($new, PASSWORD_DEFAULT);
-                    $stmt = getDB()->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
-                    $stmt->bind_param('si', $hash, $_SESSION['user_id']);
-                    $stmt->execute();
+                    $newHash = password_hash($new, PASSWORD_DEFAULT);
+                    User::updatePassword($_SESSION['user_id'], $newHash);
                     $success = '비밀번호가 변경되었습니다.';
                 }
             } catch (mysqli_sql_exception $e) {

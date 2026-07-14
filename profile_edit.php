@@ -1,16 +1,14 @@
 <?php
-require_once __DIR__ . '/auth_check.php';
-require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/csrf.php';
+require 'auth_check.php';
+require 'db.php';
+require 'csrf.php';
+
+use App\Models\User;
 
 $error = '';
 $success = '';
 
-//현재 나의 정보를 불러오기 
-$stmt = getDB()->prepare('SELECT name, bio FROM users WHERE id = ?');
-$stmt->bind_param('i', $_SESSION['user_id']);
-$stmt->execute();
-$user = $stmt->get_result()->fetch_assoc();
+$user = User::findById($_SESSION['user_id']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_verify()) {
@@ -25,9 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = '이름은 50자 이내로.';
         } else {
             try {
-                $stmt = getDB()->prepare('UPDATE users SET name = ?, bio = ? WHERE id = ?');
-                $stmt->bind_param('ssi', $name, $bio, $_SESSION['user_id']);
-                $stmt->execute();
+                User::updateProfile($_SESSION['user_id'], $name, $bio);
 
                 $_SESSION['name'] = $name;
                 $success = '수정되었습니다.';
@@ -59,7 +55,7 @@ require 'header.php';
             <div class="mb-3">
                 <label class="form-label">이름</label>
                 <input type="text" name="name" class="form-control"
-                       value="<?= htmlspecialchars($user['name']) ?>">
+                    value="<?= htmlspecialchars($user['name']) ?>">
             </div>
 
             <div class="mb-3">
